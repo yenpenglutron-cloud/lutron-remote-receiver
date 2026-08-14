@@ -1,0 +1,23 @@
+﻿<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#081522">
+  <title>Lutron Monitor｜跨網路遠端監看</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="app-header"><div class="brand">Lutron Monitor<span>LUTRON RS-232</span></div><div id="connectionBadge" class="status waiting">等待配對</div></header>
+    <section class="hero">
+      <div class="hero-copy"><h1>跨網路遠端監看</h1><p>輸入發射端提供的 6 位配對碼，即可即時接收量測資料。</p><p class="hint">iPhone、iPad、Mac 與 Windows 均可使用。</p></div>
+      <form id="pairForm" class="pair-panel"><label for="pairCode">輸入 6 位配對碼</label><input id="pairCode" name="pairCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" aria-describedby="pairStatus"><button id="joinButton" type="submit">加入遠端監看</button><button id="stopButton" type="button" hidden>停止遠端連線</button><p id="pairStatus" role="status">尚未連線</p></form>
+    </section>
+    <section class="monitor"><div class="section-heading"><div><h2>即時測試資料</h2><p id="sourceLabel">等待發射端資料</p></div><span id="sampleCount">0 個通道</span></div><div id="emptyState" class="empty-state">完成配對後，量測通道會顯示於此處。</div><div id="cards" class="cards" aria-live="polite"></div></section>
+    <footer>瀏覽器接收端不需 USB，僅接收發射端分享的資料。</footer>
+  </main>
+</body>
+</html>
