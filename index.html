@@ -7,7 +7,7 @@
   <title>Lutron Monitor｜跨網路遠端監看</title>
   <link rel="stylesheet" href="./styles.css?v=20260814-1628">
   <script defer src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
-  <script defer src="./app.js?v=20260814-1628"></script>
+  <script defer src="./app.js?v=20260814-1720"></script>
 </head>
 <body>
   <main class="shell">
@@ -22,6 +22,7 @@
     <section class="logger monitor"><div class="section-heading"><div><h2>記錄器</h2><p id="loggerInfo">尚未開始記錄。</p></div><div class="logger-actions"><select id="loggerInterval" aria-label="記錄間隔"><option value="1000">1 秒</option><option value="5000" selected>5 秒</option><option value="10000">10 秒</option><option value="30000">30 秒</option><option value="60000">60 秒</option></select><button id="loggerToggle" type="button">▶ 開始記錄</button><button id="exportCsv" type="button" disabled>匯出 CSV</button></div></div></section>
     <section class="monitor log-history"><div class="section-heading"><div><h2>記錄資料</h2><p>累積 10 筆後會固定視窗高度；可拖曳拉桿調整並上下捲動。</p></div><span id="logCount">0 筆</span></div><div id="logResizeHandle" class="log-resize-handle" role="separator" aria-label="拖曳調整記錄視窗高度" title="上下拖曳調整記錄視窗高度"><span>↕ 拖曳調整記錄視窗高度</span></div><div id="logTableWrap" class="log-table-wrap"><p class="settings-empty">開始記錄後，資料會顯示於此處。</p></div></section>
     <dialog id="alarmDialog"><form method="dialog" id="alarmForm" class="alarm-form"><h2 id="alarmTitle">通道 Alarm</h2><p id="alarmUnit"></p><label>低 Alarm<input id="lowAlarm" inputmode="decimal" placeholder="不設定"></label><label>高 Alarm<input id="highAlarm" inputmode="decimal" placeholder="不設定"></label><div class="dialog-actions"><button value="cancel">取消</button><button id="clearAlarm" value="clear" type="button">清除</button><button value="save">儲存</button></div></form></dialog>
+    <dialog id="csvNameDialog"><form id="csvNameForm" class="alarm-form"><h2>匯出 CSV</h2><p>請輸入要儲存的檔案名稱。</p><label>檔案名稱<input id="csvFileName" maxlength="180" autocomplete="off" required></label><div class="dialog-actions"><button id="cancelCsvName" type="button">取消</button><button type="submit">下載 CSV</button></div></form></dialog>
     <footer>瀏覽器接收端不需 USB，僅接收發射端分享的資料。</footer>
   </main>
 </body>
