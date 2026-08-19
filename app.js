@@ -318,6 +318,17 @@
       const c = (state.connection = peer.connect(PREFIX + state.code, {
         reliable: true,
       }));
+      const checkIce = setInterval(() => {
+        if (state.connection !== c) {
+          clearInterval(checkIce);
+          return;
+        }
+        const pc = c.peerConnection;
+        if (pc && (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "closed")) {
+          clearInterval(checkIce);
+          retry();
+        }
+      }, 1500);
       c.on("open", () => {
         if (state.connection !== c) return;
         clearTimeout(state.retry);
@@ -344,12 +355,7 @@
     });
     peer.on("error", (err) => {
       if (state.peer !== peer) return;
-      if (err.type === "webrtc") {
-        const pc = state.connection?.peerConnection;
-        if (pc && pc.iceConnectionState !== "failed" && pc.iceConnectionState !== "disconnected" && pc.iceConnectionState !== "closed") {
-          return;
-        }
-      }
+      if (err.type === "webrtc") return; // Completely ignore PeerJS WebRTC errors, rely on our own ICE monitor
       if (state.connection && state.connection.open && (err.type === "network" || err.type === "server-error")) {
         return;
       }
