@@ -198,6 +198,7 @@
     lastBeep: 0,
     statusKey: "wait_pair",
     statusClass: "waiting",
+    wakeLock: null,
   };
   const $ = (id) => document.getElementById(id),
     form = $("pairForm"),
@@ -291,6 +292,7 @@
     state.attempt = 0;
     $("stopButton").hidden = true;
     if (message) setStatus(message);
+    releaseWakeLock();
   }
   function retry() {
     if (!state.code || state.retry) return;
@@ -732,6 +734,26 @@
   });
   input.oninput = () =>
     (input.value = input.value.replace(/\D/g, "").slice(0, 6));
+
+  async function requestWakeLock() {
+    try {
+      if ("wakeLock" in navigator) {
+        state.wakeLock = await navigator.wakeLock.request("screen");
+      }
+    } catch (err) {}
+  }
+  function releaseWakeLock() {
+    if (state.wakeLock) {
+      state.wakeLock.release().catch(() => {});
+      state.wakeLock = null;
+    }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.code) {
+      requestWakeLock();
+    }
+  });
+
   form.onsubmit = (e) => {
     e.preventDefault();
     if (input.value.length !== 6) {
@@ -743,6 +765,7 @@
     state.code = input.value;
     state.session++;
     setStatus("status_joining");
+    requestWakeLock();
     connect(state.session);
   };
   $("stopButton").onclick = () => {
