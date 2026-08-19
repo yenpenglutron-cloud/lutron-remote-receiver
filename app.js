@@ -318,15 +318,33 @@
       const c = (state.connection = peer.connect(PREFIX + state.code, {
         reliable: true,
       }));
+      state.lastDataTime = Date.now();
       const checkIce = setInterval(() => {
         if (state.connection !== c) {
           clearInterval(checkIce);
           return;
         }
-        const pc = c.peerConnection;
-        if (pc && (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "closed")) {
+        const dc = c.dataChannel;
+        if (dc && (dc.readyState === "closing" || dc.readyState === "closed")) {
           clearInterval(checkIce);
           retry();
+          return;
+        }
+        const pc = c.peerConnection;
+        if (pc) {
+          const ice = pc.iceConnectionState;
+          const conn = pc.connectionState;
+          if (ice === "failed" || ice === "disconnected" || ice === "closed" ||
+              conn === "failed" || conn === "disconnected" || conn === "closed") {
+            clearInterval(checkIce);
+            retry();
+            return;
+          }
+        }
+        if (state.statusKey === "status_connected" && Date.now() - state.lastDataTime > 20000) {
+          clearInterval(checkIce);
+          retry();
+          return;
         }
       }, 1500);
       c.on("open", () => {
@@ -363,6 +381,7 @@
     });
   }
   function receive(payload) {
+    state.lastDataTime = Date.now();
     if (payload?.type !== "readings" || !Array.isArray(payload.readings))
       return;
     const source = String(payload.alias || "REMOTE"),
