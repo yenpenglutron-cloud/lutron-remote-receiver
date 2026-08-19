@@ -620,17 +620,6 @@
       $("loggerInfo").textContent = t("logging");
     }
   };
-  function utf16le(text) {
-    const bytes = new Uint8Array(2 + text.length * 2);
-    bytes[0] = 255;
-    bytes[1] = 254;
-    for (let i = 0; i < text.length; i++) {
-      const code = text.charCodeAt(i);
-      bytes[2 + i * 2] = code & 255;
-      bytes[3 + i * 2] = code >> 8;
-    }
-    return bytes;
-  }
   function defaultCsvName() {
     const now = new Date(),
       pad = (value) => String(value).padStart(2, "0");
@@ -645,33 +634,28 @@
         .slice(0, 180) || fallback;
     return /\.csv$/i.test(cleaned) ? cleaned : `${cleaned}.csv`;
   }
-  function csvTime(value) {
-    return `="${String(value).replaceAll('"', '""')}"`;
+  function escapeCsv(value) {
+    let str = String(value);
+    if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+      return `"${str.replaceAll('"', '""')}"`;
+    }
+    return str;
   }
   function downloadCsv(fileName) {
     const cols = [...new Set(state.logs.flatMap((x) => Object.keys(x.values)))],
       rows = [
         ["Time", ...cols.flatMap((c) => [`${c} Value`, `${c} Unit`])],
         ...state.logs.map((x) => [
-          csvTime(x.time),
+          x.time,
           ...cols.flatMap((c) => [x.values[c] ?? "", x.units?.[c] ?? ""]),
         ]),
       ],
-      tsv = rows
-        .map((r) =>
-          r
-            .map((v) =>
-              String(v)
-                .replaceAll("\t", " ")
-                .replaceAll("\r", " ")
-                .replaceAll("\n", " "),
-            )
-            .join("\t"),
-        )
+      csvContent = rows
+        .map((r) => r.map(escapeCsv).join(","))
         .join("\r\n"),
       a = document.createElement("a");
     a.href = URL.createObjectURL(
-      new Blob([utf16le(tsv)], { type: "text/csv;charset=utf-16le" }),
+      new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8" }),
     );
     a.download = csvFileName(fileName, defaultCsvName());
     a.click();
