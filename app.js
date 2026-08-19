@@ -320,6 +320,8 @@
       }));
       c.on("open", () => {
         if (state.connection !== c) return;
+        clearTimeout(state.retry);
+        state.retry = null;
         state.attempt = 0;
         setStatus("status_connected", "connected");
         $("stopButton").hidden = false;
@@ -342,6 +344,12 @@
     });
     peer.on("error", (err) => {
       if (state.peer !== peer) return;
+      if (err.type === "webrtc") {
+        const pc = state.connection?.peerConnection;
+        if (pc && pc.iceConnectionState !== "failed" && pc.iceConnectionState !== "disconnected" && pc.iceConnectionState !== "closed") {
+          return;
+        }
+      }
       if (state.connection && state.connection.open && (err.type === "network" || err.type === "server-error")) {
         return;
       }
