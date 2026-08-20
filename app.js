@@ -653,6 +653,17 @@
     }
     return str;
   }
+  function utf16le(str) {
+    const buf = new Uint8Array(str.length * 2 + 2);
+    buf[0] = 0xff;
+    buf[1] = 0xfe;
+    for (let i = 0, j = 2; i < str.length; i++, j += 2) {
+      const code = str.charCodeAt(i);
+      buf[j] = code & 0xff;
+      buf[j + 1] = code >> 8;
+    }
+    return buf;
+  }
   function downloadCsv(fileName) {
     const cols = [...new Set(state.logs.flatMap((x) => Object.keys(x.values)))],
       rows = [
@@ -662,12 +673,12 @@
           ...cols.flatMap((c) => [x.values[c] ?? "", x.units?.[c] ?? ""]),
         ]),
       ],
-      csvContent = rows
-        .map((r) => r.map(escapeCsv).join(","))
+      tsvContent = rows
+        .map((r) => r.map((v) => String(v).replace(/[\t\r\n]/g, " ")).join("\t"))
         .join("\r\n"),
       a = document.createElement("a");
     a.href = URL.createObjectURL(
-      new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8" }),
+      new Blob([utf16le(tsvContent)], { type: "text/csv;charset=utf-16le" }),
     );
     a.download = csvFileName(fileName, defaultCsvName());
     a.click();
