@@ -38,6 +38,7 @@
       start_record: "▶ 開始記錄",
       stop_record: "■ 停止記錄",
       export_csv: "匯出 CSV",
+      export_xlsx: "匯出 XLSX",
       recorded_data: "記錄資料",
       recorded_data_desc:
         "累積 10 筆後會固定視窗高度；可拖曳拉桿調整並上下捲動。",
@@ -55,8 +56,11 @@
       btn_save: "儲存",
       csv_export: "匯出 CSV",
       csv_desc: "請輸入要儲存的檔案名稱。",
+      xlsx_export: "匯出 XLSX",
+      xlsx_desc: "適用三星 Google Sheets；請輸入要儲存的檔案名稱。",
       file_name: "檔案名稱",
       download_csv: "下載 CSV",
+      download_xlsx: "下載 XLSX",
       footer_desc: "瀏覽器接收端不需 USB，僅接收發射端分享的資料。",
       status_retry: "遠端連線已中斷，正在重新連線…",
       status_connected: "遠端已連線",
@@ -113,6 +117,7 @@
       start_record: "▶ Start Recording",
       stop_record: "■ Stop Recording",
       export_csv: "Export CSV",
+      export_xlsx: "Export XLSX",
       recorded_data: "Recorded Data",
       recorded_data_desc:
         "Height is fixed after 10 records; drag to resize and scroll.",
@@ -130,8 +135,11 @@
       btn_save: "Save",
       csv_export: "Export CSV",
       csv_desc: "Please enter file name to save.",
+      xlsx_export: "Export XLSX",
+      xlsx_desc: "For Samsung Google Sheets; please enter a file name.",
       file_name: "File name",
       download_csv: "Download CSV",
+      download_xlsx: "Download XLSX",
       footer_desc:
         "Browser receiver doesn't need USB, only receives shared data.",
       status_retry: "Connection lost, retrying...",
@@ -211,6 +219,7 @@
     statusKey: "wait_pair",
     statusClass: "waiting",
     wakeLock: null,
+    exportFormat: "csv",
   };
   const $ = (id) => document.getElementById(id),
     form = $("pairForm"),
@@ -601,8 +610,11 @@
     render();
   };
   function snapshot() {
+    const now = new Date(),
+      pad = (value) => String(value).padStart(2, "0"),
+      timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
     const row = {
-      time: new Date().toLocaleString("sv-SE"),
+      time: timestamp,
       values: {},
       units: {},
     };
@@ -617,6 +629,7 @@
     state.logs.push(row);
     $("loggerInfo").textContent = t("recorded_count_msg", state.logs.length);
     $("exportCsv").disabled = !state.logs.length;
+    $("exportXlsx").disabled = !state.logs.length;
     renderLogs();
   }
   $("loggerToggle").onclick = () => {
@@ -646,6 +659,15 @@
         .slice(0, 180) || fallback;
     return /\.csv$/i.test(cleaned) ? cleaned : `${cleaned}.csv`;
   }
+  function xlsxFileName(input, fallback) {
+    const cleaned =
+      String(input || fallback)
+        .trim()
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+        .replace(/[. ]+$/g, "")
+        .slice(0, 180) || fallback;
+    return /\.xlsx$/i.test(cleaned) ? cleaned : `${cleaned}.xlsx`;
+  }
   function escapeCsv(value) {
     let str = String(value);
     if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
@@ -653,50 +675,99 @@
     }
     return str;
   }
-  function utf16le(text) {
-    const bytes = new Uint8Array(2 + text.length * 2);
-    bytes[0] = 0xff;
-    bytes[1] = 0xfe;
-    for (let i = 0; i < text.length; i += 1) {
-      const code = text.charCodeAt(i);
-      bytes[2 + i * 2] = code & 0xff;
-      bytes[3 + i * 2] = code >> 8;
-    }
-    return bytes;
-  }
-  function csvTime(value) {
-    return `="${String(value).replaceAll('"', '""')}"`;
-  }
   function downloadCsv(fileName) {
     const cols = [...new Set(state.logs.flatMap((x) => Object.keys(x.values)))],
       rows = [
         ["Time", ...cols.flatMap((c) => [`${c} Value`, `${c} Unit`])],
         ...state.logs.map((x) => [
-          csvTime(x.time),
+          x.time,
           ...cols.flatMap((c) => [x.values[c] ?? "", x.units?.[c] ?? ""]),
         ]),
       ],
-      tsv = rows
-        .map((r) => r.map((v) => String(v).replaceAll("\t", " ").replaceAll("\r", " ").replaceAll("\n", " ")).join("\t"))
+      csvContent = rows
+        .map((r) => r.map(escapeCsv).join(","))
         .join("\r\n"),
       a = document.createElement("a");
     a.href = URL.createObjectURL(
-      new Blob([utf16le(tsv)], { type: "text/csv;charset=utf-16le" }),
+      new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8" }),
     );
     a.download = csvFileName(fileName, defaultCsvName());
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
-  $("exportCsv").onclick = () => {
+  function xmlEscape(value) {
+    return String(value).replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&apos;",
+    })[char]);
+  }
+  function xlsxColumnName(index) {
+    let result = "";
+    for (let value = index + 1; value; value = Math.floor((value - 1) / 26)) {
+      result = String.fromCharCode(65 + ((value - 1) % 26)) + result;
+    }
+    return result;
+  }
+  function crc32(bytes) {
+    let crc = -1;
+    for (const byte of bytes) {
+      crc ^= byte;
+      for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    }
+    return (crc ^ -1) >>> 0;
+  }
+  function zipStore(files) {
+    const encoder = new TextEncoder(), parts = [], central = [];
+    let offset = 0;
+    const u16 = (value) => new Uint8Array([value & 255, (value >>> 8) & 255]);
+    const u32 = (value) => new Uint8Array([value & 255, (value >>> 8) & 255, (value >>> 16) & 255, (value >>> 24) & 255]);
+    for (const [name, text] of files) {
+      const nameBytes = encoder.encode(name), data = encoder.encode(text), crc = crc32(data);
+      const local = [u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0), u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0), nameBytes, data];
+      const size = local.reduce((sum, part) => sum + part.length, 0);
+      parts.push(...local);
+      central.push(u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0), u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), nameBytes);
+      offset += size;
+    }
+    const centralSize = central.reduce((sum, part) => sum + part.length, 0), end = [u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length), u32(centralSize), u32(offset), u16(0)];
+    return new Blob([...parts, ...central, ...end], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  }
+  function downloadXlsx(fileName) {
+    const cols = [...new Set(state.logs.flatMap((x) => Object.keys(x.values)))], rows = [[t("time"), ...cols.flatMap((c) => [`${c} Value`, `${c} Unit`])], ...state.logs.map((x) => [x.time, ...cols.flatMap((c) => [x.values[c] ?? "", x.units?.[c] ?? ""])] )];
+    const sheetRows = rows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((value, columnIndex) => `<c r="${xlsxColumnName(columnIndex)}${rowIndex + 1}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`).join("")}</row>`).join("");
+    const files = [
+      ["[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`],
+      ["_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+      ["xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Lutron Remote" sheetId="1" r:id="rId1"/></sheets></workbook>`],
+      ["xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`],
+      ["xl/worksheets/sheet1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`],
+    ];
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(zipStore(files));
+    a.download = xlsxFileName(fileName, defaultCsvName());
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  function openExportNameDialog(format) {
+    state.exportFormat = format;
     const input = $("csvFileName");
     input.value = defaultCsvName();
+    $("exportNameTitle").textContent = t(format === "xlsx" ? "xlsx_export" : "csv_export");
+    $("exportNameDesc").textContent = t(format === "xlsx" ? "xlsx_desc" : "csv_desc");
+    $("downloadExport").textContent = t(format === "xlsx" ? "download_xlsx" : "download_csv");
     $("csvNameDialog").showModal();
     requestAnimationFrame(() => input.select());
-  };
+  }
+  $("exportCsv").onclick = () => openExportNameDialog("csv");
+  $("exportXlsx").onclick = () => openExportNameDialog("xlsx");
   $("cancelCsvName").onclick = () => $("csvNameDialog").close();
   $("csvNameForm").onsubmit = (event) => {
     event.preventDefault();
-    downloadCsv($("csvFileName").value);
+    if (state.exportFormat === "xlsx") downloadXlsx($("csvFileName").value);
+    else downloadCsv($("csvFileName").value);
     $("csvNameDialog").close();
   };
   function resetForNewPair() {
@@ -710,6 +781,7 @@
     state.stats.clear();
     state.logs = [];
     $("exportCsv").disabled = true;
+    $("exportXlsx").disabled = true;
     $("loggerInfo").textContent = t("logger_not_started");
     render();
   }

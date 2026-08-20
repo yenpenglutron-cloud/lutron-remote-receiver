@@ -136,6 +136,13 @@
               data-i18n="export_csv"
             >
               匯出 CSV
+            </button><button
+              id="exportXlsx"
+              type="button"
+              disabled
+              data-i18n="export_xlsx"
+            >
+              匯出 XLSX
             </button>
           </div>
         </div>
@@ -194,8 +201,8 @@
       </dialog>
       <dialog id="csvNameDialog">
         <form id="csvNameForm" class="alarm-form">
-          <h2 data-i18n="csv_export">匯出 CSV</h2>
-          <p data-i18n="csv_desc">請輸入要儲存的檔案名稱。</p>
+          <h2 id="exportNameTitle" data-i18n="csv_export">匯出 CSV</h2>
+          <p id="exportNameDesc" data-i18n="csv_desc">請輸入要儲存的檔案名稱。</p>
           <label
             ><span data-i18n="file_name">檔案名稱</span
             ><input
@@ -207,7 +214,7 @@
           <div class="dialog-actions">
             <button id="cancelCsvName" type="button" data-i18n="btn_cancel">
               取消</button
-            ><button type="submit" data-i18n="download_csv">下載 CSV</button>
+            ><button id="downloadExport" type="submit" data-i18n="download_csv">下載 CSV</button>
           </div>
         </form>
       </dialog>
