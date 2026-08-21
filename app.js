@@ -508,18 +508,18 @@
             r.label ||
             r.displayName ||
             `Channel ${r.displayCode || r.channel}`;
-        return `<label class="channel-option" style="--source:${esc(r.color)}"><input type="checkbox" data-key="${id}" data-field="visible" ${opt.visible ? "checked" : ""}><span class="option-index">${index + 1}</span><span class="option-name">${esc(label)}</span></label>`;
+        return `<button type="button" class="channel-option" style="--source:${esc(r.color)}" data-key="${id}" data-visible="${opt.visible}" role="checkbox" aria-checked="${opt.visible}" aria-label="${esc(label)}"><span class="channel-check" aria-hidden="true">✓</span><span class="option-index">${index + 1}</span><span class="option-name">${esc(label)}</span></button>`;
       })
       .join("");
     optionsPanel
-      .querySelectorAll("input")
+      .querySelectorAll(".channel-option")
       .forEach(
-        (box) =>
-          (box.onchange = () =>
+        (card) =>
+          (card.onclick = () =>
             changeOption(
-              decodeURIComponent(box.dataset.key),
-              box.dataset.field,
-              box.checked,
+              decodeURIComponent(card.dataset.key),
+              "visible",
+              card.dataset.visible !== "true",
             )),
       );
   }
