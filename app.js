@@ -277,6 +277,19 @@
     saveOptions();
     render();
   }
+  // Keep one delegated handler on the container.  Incoming readings rebuild the
+  // cards frequently, so individual card handlers can otherwise be lost between
+  // a touch and its click event on some tablet browsers.
+  optionsPanel.addEventListener("click", (event) => {
+    const card = event.target.closest(".channel-option");
+    if (!card || !optionsPanel.contains(card)) return;
+    event.preventDefault();
+    changeOption(
+      decodeURIComponent(card.dataset.key),
+      "visible",
+      card.dataset.visible !== "true",
+    );
+  });
   function numberOf(reading) {
     for (const raw of [
       reading?.value,
@@ -511,17 +524,6 @@
         return `<button type="button" class="channel-option" style="--source:${esc(r.color)}" data-key="${id}" data-visible="${opt.visible}" role="checkbox" aria-checked="${opt.visible}" aria-label="${esc(label)}"><span class="channel-check" aria-hidden="true">✓</span><span class="option-index">${index + 1}</span><span class="option-name">${esc(label)}</span></button>`;
       })
       .join("");
-    optionsPanel
-      .querySelectorAll(".channel-option")
-      .forEach(
-        (card) =>
-          (card.onclick = () =>
-            changeOption(
-              decodeURIComponent(card.dataset.key),
-              "visible",
-              card.dataset.visible !== "true",
-            )),
-      );
   }
   function renderLogs() {
     const rows = [...state.logs].reverse(),
