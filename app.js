@@ -9,7 +9,6 @@
       hero_hint: "iPhone、iPad、Mac 與 Windows 均可使用。",
       pair_label: "輸入 6 位配對碼",
       pair_btn: "加入遠端監看",
-      refresh_btn: "↻ 重新整理遠端連線",
       stop_btn: "停止遠端連線",
       not_connected: "尚未連線",
       realtime_data: "即時測試資料",
@@ -89,7 +88,6 @@
       hero_hint: "Available for iPhone, iPad, Mac, and Windows.",
       pair_label: "Enter 6-digit code",
       pair_btn: "Join Monitoring",
-      refresh_btn: "↻ Refresh Remote Connection",
       stop_btn: "Stop Connection",
       not_connected: "Not connected",
       realtime_data: "Real-time Data",
@@ -186,7 +184,6 @@
     window.setLang(currentLang),
   );
   const PREFIX = "lutron-v28-",
-    REFRESH_CODE_KEY = "lutron-remote-refresh-code-v1",
     palette = [
       "#36d6c5",
       "#f6b94a",
@@ -508,18 +505,18 @@
             r.label ||
             r.displayName ||
             `Channel ${r.displayCode || r.channel}`;
-        return `<button type="button" class="channel-option" style="--source:${esc(r.color)}" data-key="${id}" data-visible="${opt.visible}" role="checkbox" aria-checked="${opt.visible}" aria-label="${esc(label)}"><span class="channel-check" aria-hidden="true">✓</span><span class="option-index">${index + 1}</span><span class="option-name">${esc(label)}</span></button>`;
+        return `<label class="channel-option" style="--source:${esc(r.color)}"><input type="checkbox" data-key="${id}" data-field="visible" ${opt.visible ? "checked" : ""}><span class="option-index">${index + 1}</span><span class="option-name">${esc(label)}</span></label>`;
       })
       .join("");
     optionsPanel
-      .querySelectorAll(".channel-option")
+      .querySelectorAll("input")
       .forEach(
-        (card) =>
-          (card.onclick = () =>
+        (box) =>
+          (box.onchange = () =>
             changeOption(
-              decodeURIComponent(card.dataset.key),
-              "visible",
-              card.dataset.visible !== "true",
+              decodeURIComponent(box.dataset.key),
+              box.dataset.field,
+              box.checked,
             )),
       );
   }
@@ -856,21 +853,5 @@
   $("stopButton").onclick = () => {
     stop("status_stop");
     state.code = "";
-    sessionStorage.removeItem(REFRESH_CODE_KEY);
   };
-  $("refreshButton").onclick = () => {
-    if (!/^\d{6}$/.test(input.value)) {
-      setStatus("status_failed", "failed");
-      input.focus();
-      return;
-    }
-    sessionStorage.setItem(REFRESH_CODE_KEY, input.value);
-    window.location.reload();
-  };
-  const refreshCode = sessionStorage.getItem(REFRESH_CODE_KEY);
-  if (/^\d{6}$/.test(refreshCode || "")) {
-    sessionStorage.removeItem(REFRESH_CODE_KEY);
-    input.value = refreshCode;
-    queueMicrotask(() => form.requestSubmit());
-  }
 })();
