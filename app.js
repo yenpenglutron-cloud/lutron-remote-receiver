@@ -347,14 +347,28 @@
   function calibratedNumber(r) {
     return applyCalibration(numberOf(r), calibrationFor(r.key));
   }
+  function receivedDisplayValue(reading) {
+    // V29 senders keep the instrument value in `value` and put the value that
+    // must be shown remotely in `transmittedValue` after source calibration.
+    // Prefer that transmitted result so the web receiver behaves like the APK
+    // receiver.  The additional names keep compatibility with older payloads.
+    return (
+      reading?.transmittedValue ??
+      reading?.calibratedValue ??
+      reading?.effectiveValue ??
+      reading?.value ??
+      reading?.displayValue ??
+      "--"
+    );
+  }
   function calibratedDisplay(r) {
     const raw = numberOf(r), calibration = calibrationFor(r.key);
     if (!calibration || !Number.isFinite(raw)) {
-      return { value: r.value ?? r.displayValue ?? "--", calibrated: false };
+      return { value: receivedDisplayValue(r), calibrated: false };
     }
     const result = applyCalibration(raw, calibration);
-    if (!Number.isFinite(result)) return { value: r.value ?? r.displayValue ?? "--", calibrated: false };
-    const rawShown = r.value ?? r.displayValue ?? raw,
+    if (!Number.isFinite(result)) return { value: receivedDisplayValue(r), calibrated: false };
+    const rawShown = receivedDisplayValue(r) ?? raw,
       digits = Math.min(6, Math.max(decimalPlaces(rawShown), decimalPlaces(calibration.number)));
     const formatted = result.toFixed(digits);
     return {
@@ -377,6 +391,9 @@
   });
   function numberOf(reading) {
     for (const raw of [
+      reading?.transmittedValue,
+      reading?.calibratedValue,
+      reading?.effectiveValue,
       reading?.value,
       reading?.displayValue,
       reading?.canonicalValue,
