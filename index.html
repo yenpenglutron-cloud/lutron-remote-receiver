@@ -13,7 +13,7 @@
       defer
       src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"
     ></script>
-    <script defer src="./app.js?v=20260814-1805"></script>
+    <script defer src="./app.js?v=20260823-1517"></script>
   </head>
   <body>
     <main class="shell">
@@ -199,6 +199,29 @@
             >
               清除</button
             ><button value="save" data-i18n="btn_save">儲存</button>
+          </div>
+        </form>
+      </dialog>
+      <dialog id="calibrationDialog">
+        <form id="calibrationForm" class="alarm-form" method="dialog">
+          <h2 id="calibrationTitle">校正係數</h2>
+          <p data-i18n="calibration_desc">選擇運算方式並輸入校正數字；畫面、統計、Alarm、Logger 與匯出資料都使用校正後數值。</p>
+          <label><span data-i18n="calibration_operator">運算方式</span>
+            <select id="calibrationOperator">
+              <option value="add">＋</option>
+              <option value="subtract">－</option>
+              <option value="multiply">×</option>
+              <option value="divide">÷</option>
+            </select>
+          </label>
+          <label><span data-i18n="calibration_number">校正數字</span>
+            <input id="calibrationNumber" type="number" inputmode="decimal" step="any" required />
+          </label>
+          <p id="calibrationError" class="dialog-error" role="alert"></p>
+          <div class="dialog-actions">
+            <button id="cancelCalibration" type="button" data-i18n="btn_cancel">取消</button>
+            <button id="clearCalibration" type="button" data-i18n="btn_clear">清除</button>
+            <button type="submit" data-i18n="btn_save">儲存</button>
           </div>
         </form>
       </dialog>

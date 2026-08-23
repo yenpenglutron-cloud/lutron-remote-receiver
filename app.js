@@ -77,8 +77,16 @@
       log_stopped: "記錄已停止，共 {0} 筆。",
       logging: "記錄中…",
       recorded_count_msg: "已記錄 {0} 筆資料。",
+      date: "日期",
       time: "時間",
       source_index: "（來源 {0}）",
+      calibration: "校正係數",
+      calibration_title: "{0} 校正係數",
+      calibration_desc: "選擇運算方式並輸入校正數字；畫面、統計、Alarm、Logger 與匯出資料都使用校正後數值。",
+      calibration_operator: "運算方式",
+      calibration_number: "校正數字",
+      calibrated: "已校正",
+      calibration_invalid: "請輸入有效的校正數字；除法不可使用 0。",
     },
     en: {
       title: "Lutron Monitor | Remote Monitoring",
@@ -158,8 +166,16 @@
       log_stopped: "Recording stopped, total {0}.",
       logging: "Recording...",
       recorded_count_msg: "Recorded {0} items.",
+      date: "Date",
       time: "Time",
       source_index: "(Source {0})",
+      calibration: "Calibration",
+      calibration_title: "{0} Calibration",
+      calibration_desc: "Choose an operation and enter a factor. Display, statistics, alarms, logger, and exports all use the calibrated value.",
+      calibration_operator: "Operation",
+      calibration_number: "Calibration value",
+      calibrated: "Calibrated",
+      calibration_invalid: "Enter a valid value. Division by zero is not allowed.",
     },
   };
   let currentLang = localStorage.getItem("lutron-lang") || "zh";
@@ -202,6 +218,7 @@
       sensitivity: "base",
     }),
     OPTION_KEY = "lutron-remote-channel-options-v1";
+  const CALIBRATION_KEY = "lutron-remote-channel-calibrations-v1";
   const state = {
     peer: null,
     connection: null,
@@ -214,6 +231,7 @@
     stats: new Map(),
     alarms: new Map(),
     options: new Map(),
+    calibrations: new Map(),
     logs: [],
     logger: null,
     editing: null,
@@ -258,6 +276,10 @@
   try {
     savedOptions = JSON.parse(localStorage.getItem(OPTION_KEY) || "{}");
   } catch {}
+  let savedCalibrations = {};
+  try {
+    savedCalibrations = JSON.parse(localStorage.getItem(CALIBRATION_KEY) || "{}");
+  } catch {}
   function optionFor(key) {
     if (!state.options.has(key)) {
       const old = savedOptions[key] || {};
@@ -276,6 +298,60 @@
     optionFor(key)[field] = value;
     saveOptions();
     render();
+  }
+  function calibrationFor(key) {
+    if (!state.calibrations.has(key) && savedCalibrations[key]) {
+      const item = savedCalibrations[key];
+      if (["add", "subtract", "multiply", "divide"].includes(item.operator) && Number.isFinite(Number(item.number))) {
+        state.calibrations.set(key, {
+          operator: item.operator,
+          number: Number(item.number),
+        });
+      }
+    }
+    return state.calibrations.get(key);
+  }
+  function saveCalibrations() {
+    const out = {};
+    for (const [key, value] of state.calibrations) out[key] = value;
+    try {
+      localStorage.setItem(CALIBRATION_KEY, JSON.stringify(out));
+    } catch {}
+  }
+  function decimalPlaces(value) {
+    const text = String(value);
+    if (/e/i.test(text)) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? Math.min(6, Math.max(0, (numeric.toString().split(".")[1] || "").length)) : 0;
+    }
+    return (text.split(".")[1] || "").length;
+  }
+  function applyCalibration(raw, calibration) {
+    if (!calibration || !Number.isFinite(raw)) return raw;
+    let result = raw;
+    if (calibration.operator === "add") result = raw + calibration.number;
+    else if (calibration.operator === "subtract") result = raw - calibration.number;
+    else if (calibration.operator === "multiply") result = raw * calibration.number;
+    else if (calibration.operator === "divide" && calibration.number !== 0) result = raw / calibration.number;
+    return result;
+  }
+  function calibratedNumber(r) {
+    return applyCalibration(numberOf(r), calibrationFor(r.key));
+  }
+  function calibratedDisplay(r) {
+    const raw = numberOf(r), calibration = calibrationFor(r.key);
+    if (!calibration || !Number.isFinite(raw)) {
+      return { value: r.value ?? r.displayValue ?? "--", calibrated: false };
+    }
+    const result = applyCalibration(raw, calibration);
+    if (!Number.isFinite(result)) return { value: r.value ?? r.displayValue ?? "--", calibrated: false };
+    const rawShown = r.value ?? r.displayValue ?? raw,
+      digits = Math.min(6, Math.max(decimalPlaces(rawShown), decimalPlaces(calibration.number)));
+    const formatted = result.toFixed(digits);
+    return {
+      value: formatted.includes(".") ? formatted.replace(/0+$/, "").replace(/\.$/, "") : formatted,
+      calibrated: true,
+    };
   }
   // Keep one delegated handler on the container.  Incoming readings rebuild the
   // cards frequently, so individual card handlers can otherwise be lost between
@@ -462,13 +538,7 @@
   function alarming(r) {
     const a = state.alarms.get(r.key);
     if (!a) return false;
-    const shown =
-        r.value ??
-        r.displayValue ??
-        r.canonicalValue ??
-        r.numericValue ??
-        r.reading,
-      v = numberOf({ displayValue: shown }),
+    const v = calibratedNumber(r),
       low = Number(a.low),
       high = Number(a.high),
       hasLow = a.low !== undefined && a.low !== "" && Number.isFinite(low),
@@ -563,16 +633,38 @@
       : "";
     for (const r of visible) {
       const st = state.stats.get(r.key),
+        calibration = calibrationFor(r.key),
+        calibratedStats = st
+          ? [
+              applyCalibration(st.min, calibration),
+              applyCalibration(st.max, calibration),
+            ].sort((a, b) => a - b)
+          : null,
+        calibratedAverage = st
+          ? applyCalibration(st.sum / st.count, calibration)
+          : NaN,
         unit = r.unit || "",
-        value = r.value ?? r.displayValue ?? "--",
+        shown = calibratedDisplay(r),
+        value = shown.value,
         hit = alarming(r),
         a = state.alarms.get(r.key);
+      const tile = document.createElement("div");
+      tile.className = "channel-tile";
       const el = document.createElement("article");
       el.className = `measurement${hit ? " alarm" : ""}`;
       el.style.setProperty("--source", r.color);
       el.onclick = () => openAlarm(r);
-      el.innerHTML = `<div class="channel">${esc(displayId(r))}</div><div class="name">${esc(r.name || r.label || r.displayName || r.displayCode || "Channel")}</div><div class="value">${esc(value)}<span class="unit">${esc(unit)}</span></div><div class="meta"><span>${t("max")}${st ? st.max.toFixed(2) : "--"}</span><span>${t("min")}${st ? st.min.toFixed(2) : "--"}</span><span>${t("avg")}${st ? (st.sum / st.count).toFixed(2) : "--"}</span></div>${a ? `<div class="alarm-limits">Alarm: ${Number.isFinite(a.low) ? `${t("low_alarm")} ${a.low}` : ""}${Number.isFinite(a.low) && Number.isFinite(a.high) ? " " : ""}${Number.isFinite(a.high) ? `${t("high_alarm")} ${a.high}` : ""}</div>` : ""}`;
-      cards.append(el);
+      el.innerHTML = `<div class="channel">${esc(displayId(r))}</div><div class="name">${esc(r.name || r.label || r.displayName || r.displayCode || "Channel")}</div><div class="value">${esc(value)}<span class="unit">${esc(unit)}</span></div>${shown.calibrated ? `<div class="calibrated-badge">${t("calibrated")}</div>` : ""}<div class="meta"><span>${t("max")}${calibratedStats ? calibratedStats[1].toFixed(2) : "--"}</span><span>${t("min")}${calibratedStats ? calibratedStats[0].toFixed(2) : "--"}</span><span>${t("avg")}${Number.isFinite(calibratedAverage) ? calibratedAverage.toFixed(2) : "--"}</span></div>${a ? `<div class="alarm-limits">Alarm: ${Number.isFinite(a.low) ? `${t("low_alarm")} ${a.low}` : ""}${Number.isFinite(a.low) && Number.isFinite(a.high) ? " " : ""}${Number.isFinite(a.high) ? `${t("high_alarm")} ${a.high}` : ""}</div>` : ""}`;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `calibration-button${shown.calibrated ? " active" : ""}`;
+      button.textContent = t("calibration");
+      button.onclick = (event) => {
+        event.stopPropagation();
+        openCalibration(r);
+      };
+      tile.append(el, button);
+      cards.append(tile);
     }
     renderOptions(data);
     renderLogs();
@@ -581,6 +673,38 @@
       beep();
     }
   }
+  function openCalibration(r) {
+    state.editing = r;
+    const calibration = calibrationFor(r.key);
+    $("calibrationTitle").textContent = t("calibration_title", displayId(r));
+    $("calibrationOperator").value = calibration?.operator || "multiply";
+    $("calibrationNumber").value = calibration?.number ?? "";
+    $("calibrationError").textContent = "";
+    $("calibrationDialog").showModal();
+  }
+  $("calibrationForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const operator = $("calibrationOperator").value,
+      number = Number($("calibrationNumber").value),
+      invalid = !Number.isFinite(number) || (operator === "divide" && number === 0);
+    if (invalid) {
+      $("calibrationError").textContent = t("calibration_invalid");
+      return;
+    }
+    if (state.editing) {
+      state.calibrations.set(state.editing.key, { operator, number });
+      saveCalibrations();
+    }
+    $("calibrationDialog").close();
+    render();
+  });
+  $("cancelCalibration").onclick = () => $("calibrationDialog").close();
+  $("clearCalibration").onclick = () => {
+    if (state.editing) state.calibrations.delete(state.editing.key);
+    saveCalibrations();
+    $("calibrationDialog").close();
+    render();
+  };
   function openAlarm(r) {
     state.editing = r;
     const a = state.alarms.get(r.key) || {};
@@ -628,7 +752,7 @@
         let column = displayId(r);
         if (Object.hasOwn(row.values, column))
           column = `${column}${t("source_index", r.sourceIndex + 1)}`;
-        row.values[column] = r.value ?? r.displayValue ?? "";
+        row.values[column] = calibratedDisplay(r).value;
         row.units[column] = r.unit || "";
       }
     state.logs.push(row);
@@ -680,14 +804,24 @@
     }
     return str;
   }
+  function splitTimestamp(value) {
+    const match = String(value || "").match(
+      /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})$/,
+    );
+    return match ? [match[1], match[2]] : [String(value || ""), ""];
+  }
   function downloadCsv(fileName) {
     const cols = [...new Set(state.logs.flatMap((x) => Object.keys(x.values)))],
       rows = [
-        ["Time", ...cols.flatMap((c) => [`${c} Value`, `${c} Unit`])],
-        ...state.logs.map((x) => [
-          x.time,
-          ...cols.flatMap((c) => [x.values[c] ?? "", x.units?.[c] ?? ""]),
-        ]),
+        [t("date"), t("time"), ...cols.flatMap((c) => [`${c} Value`, `${c} Unit`])],
+        ...state.logs.map((x) => {
+          const [date, time] = splitTimestamp(x.time);
+          return [
+            date,
+            time,
+            ...cols.flatMap((c) => [x.values[c] ?? "", x.units?.[c] ?? ""]),
+          ];
+        }),
       ],
       csvContent = rows
         .map((r) => r.map(escapeCsv).join(","))
@@ -740,15 +874,60 @@
     const centralSize = central.reduce((sum, part) => sum + part.length, 0), end = [u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length), u32(centralSize), u32(offset), u16(0)];
     return new Blob([...parts, ...central, ...end], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   }
+  function excelDateSerial(dateValue) {
+    const match = String(dateValue || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86400000 + 25569;
+  }
+  function excelTimeSerial(timeValue) {
+    const match = String(timeValue || "").match(/^(\d{2}):(\d{2}):(\d{2})$/);
+    if (!match) return null;
+    return (Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3])) / 86400;
+  }
+  function xlsxTextCell(reference, value) {
+    return `<c r="${reference}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
+  }
+  function xlsxNumberCell(reference, value, style = "") {
+    if (value === "" || value === null || value === undefined) {
+      return xlsxTextCell(reference, "");
+    }
+    const number = Number(value);
+    return Number.isFinite(number)
+      ? `<c r="${reference}"${style ? ` s="${style}"` : ""}><v>${number}</v></c>`
+      : xlsxTextCell(reference, value ?? "");
+  }
   function downloadXlsx(fileName) {
-    const cols = [...new Set(state.logs.flatMap((x) => Object.keys(x.values)))], rows = [[t("time"), ...cols.flatMap((c) => [`${c} Value`, `${c} Unit`])], ...state.logs.map((x) => [x.time, ...cols.flatMap((c) => [x.values[c] ?? "", x.units?.[c] ?? ""])] )];
-    const sheetRows = rows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((value, columnIndex) => `<c r="${xlsxColumnName(columnIndex)}${rowIndex + 1}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`).join("")}</row>`).join("");
+    const cols = [...new Set(state.logs.flatMap((x) => Object.keys(x.values)))];
+    const headers = [t("date"), t("time"), ...cols.flatMap((c) => [`${c} Value`, `${c} Unit`])];
+    const headerRow = `<row r="1">${headers.map((value, columnIndex) => xlsxTextCell(`${xlsxColumnName(columnIndex)}1`, value)).join("")}</row>`;
+    const dataRows = state.logs.map((item, itemIndex) => {
+      const rowIndex = itemIndex + 2;
+      const [date, time] = splitTimestamp(item.time);
+      const dateSerial = excelDateSerial(date);
+      const timeSerial = excelTimeSerial(time);
+      const cells = [
+        dateSerial === null ? xlsxTextCell(`A${rowIndex}`, date) : xlsxNumberCell(`A${rowIndex}`, dateSerial, "1"),
+        timeSerial === null ? xlsxTextCell(`B${rowIndex}`, time) : xlsxNumberCell(`B${rowIndex}`, timeSerial, "2"),
+      ];
+      cols.forEach((channel, channelIndex) => {
+        const valueColumn = 2 + channelIndex * 2;
+        const unitColumn = valueColumn + 1;
+        cells.push(
+          xlsxNumberCell(`${xlsxColumnName(valueColumn)}${rowIndex}`, item.values[channel] ?? ""),
+          xlsxTextCell(`${xlsxColumnName(unitColumn)}${rowIndex}`, item.units?.[channel] ?? ""),
+        );
+      });
+      return `<row r="${rowIndex}">${cells.join("")}</row>`;
+    }).join("");
+    const sheetRows = headerRow + dataRows;
+    const lastColumn = xlsxColumnName(headers.length - 1);
     const files = [
-      ["[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`],
+      ["[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`],
       ["_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
       ["xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Lutron Remote" sheetId="1" r:id="rId1"/></sheets></workbook>`],
-      ["xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`],
-      ["xl/worksheets/sheet1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`],
+      ["xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`],
+      ["xl/styles.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/><numFmt numFmtId="165" formatCode="hh:mm:ss"/></numFmts><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`],
+      ["xl/worksheets/sheet1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:${lastColumn}${state.logs.length + 1}"/><cols><col min="1" max="1" width="12" customWidth="1"/><col min="2" max="2" width="12" customWidth="1"/><col min="3" max="${headers.length}" width="16" customWidth="1"/></cols><sheetData>${sheetRows}</sheetData></worksheet>`],
     ];
     const a = document.createElement("a");
     a.href = URL.createObjectURL(zipStore(files));
