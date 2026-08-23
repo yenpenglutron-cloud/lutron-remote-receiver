@@ -203,6 +203,7 @@
   );
   const PREFIX = "lutron-v28-",
     REFRESH_CODE_KEY = "lutron-remote-refresh-code-v1",
+    REFRESH_CALIBRATION_KEY = "lutron-remote-refresh-calibrations-v1",
     palette = [
       "#36d6c5",
       "#f6b94a",
@@ -278,7 +279,16 @@
   } catch {}
   let savedCalibrations = {};
   try {
-    savedCalibrations = JSON.parse(localStorage.getItem(CALIBRATION_KEY) || "{}");
+    // Old versions persisted calibration in localStorage. Remove that data so a
+    // normal browser refresh always returns to the instrument's original value.
+    localStorage.removeItem(CALIBRATION_KEY);
+    // The in-app reconnect button transfers calibration exactly once through
+    // sessionStorage. The key is consumed immediately, so a later browser
+    // refresh still clears calibration as expected.
+    savedCalibrations = JSON.parse(
+      sessionStorage.getItem(REFRESH_CALIBRATION_KEY) || "{}",
+    );
+    sessionStorage.removeItem(REFRESH_CALIBRATION_KEY);
   } catch {}
   function optionFor(key) {
     if (!state.options.has(key)) {
@@ -314,9 +324,8 @@
   function saveCalibrations() {
     const out = {};
     for (const [key, value] of state.calibrations) out[key] = value;
-    try {
-      localStorage.setItem(CALIBRATION_KEY, JSON.stringify(out));
-    } catch {}
+    // Keep calibration only for the current connection/page session.
+    savedCalibrations = out;
   }
   function decimalPlaces(value) {
     const text = String(value);
@@ -1038,6 +1047,7 @@
     stop("status_stop");
     state.code = "";
     sessionStorage.removeItem(REFRESH_CODE_KEY);
+    sessionStorage.removeItem(REFRESH_CALIBRATION_KEY);
   };
   $("refreshButton").onclick = () => {
     if (!/^\d{6}$/.test(input.value)) {
@@ -1046,6 +1056,13 @@
       return;
     }
     sessionStorage.setItem(REFRESH_CODE_KEY, input.value);
+    const calibrationSnapshot = {};
+    for (const [key, value] of state.calibrations)
+      calibrationSnapshot[key] = value;
+    sessionStorage.setItem(
+      REFRESH_CALIBRATION_KEY,
+      JSON.stringify(calibrationSnapshot),
+    );
     window.location.reload();
   };
   const refreshCode = sessionStorage.getItem(REFRESH_CODE_KEY);
