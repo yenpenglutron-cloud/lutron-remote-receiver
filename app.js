@@ -428,6 +428,19 @@
     }
     return NaN;
   }
+  function resetStatsForKey(key) {
+    state.stats.delete(key);
+    const current = state.readings.get(key),
+      raw = numberOf(current);
+    if (Number.isFinite(raw)) {
+      state.stats.set(key, {
+        min: raw,
+        max: raw,
+        sum: raw,
+        count: 1,
+      });
+    }
+  }
   function stop(message) {
     state.session++;
     clearTimeout(state.retry);
@@ -548,7 +561,12 @@
       const channel = String(r.displayCode ?? r.channelIndex ?? r.id ?? i + 1),
         color = r.lineColor || sourceColor,
         key = `${sourceKey}|${channel}`,
-        raw = numberOf(r);
+        raw = numberOf(r),
+        previous = state.readings.get(key),
+        previousUnit = String(previous?.unit ?? "").trim(),
+        nextUnit = String(r.unit ?? "").trim(),
+        unitChanged = Boolean(previous) && previousUnit !== nextUnit;
+      if (unitChanged) state.stats.delete(key);
       state.readings.set(key, {
         ...r,
         key,
@@ -734,13 +752,17 @@
     if (state.editing) {
       state.calibrations.set(state.editing.key, { operator, number });
       saveCalibrations();
+      resetStatsForKey(state.editing.key);
     }
     $("calibrationDialog").close();
     render();
   });
   $("cancelCalibration").onclick = () => $("calibrationDialog").close();
   $("clearCalibration").onclick = () => {
-    if (state.editing) state.calibrations.delete(state.editing.key);
+    if (state.editing) {
+      state.calibrations.delete(state.editing.key);
+      resetStatsForKey(state.editing.key);
+    }
     saveCalibrations();
     $("calibrationDialog").close();
     render();
