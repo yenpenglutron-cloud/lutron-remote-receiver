@@ -347,12 +347,26 @@
   function calibratedNumber(r) {
     return applyCalibration(numberOf(r), calibrationFor(r.key));
   }
+  function normalizeReceivedValue(raw) {
+    if (raw === undefined || raw === null || raw === "") return raw;
+    const numeric = Number(String(raw).replace(/,/g, "").trim());
+    if (!Number.isFinite(numeric)) return raw;
+
+    // Sender-side calibration can expose a binary floating-point tail, such as
+    // 13.2 becoming 13.200000000000001. Keep ordinary values unchanged and
+    // normalize only suspicious long-decimal results.
+    const text = String(raw).trim();
+    const fraction = text.match(/^[-+]?\d+\.(\d+)(?:e[-+]?\d+)?$/i)?.[1];
+    if (!fraction || fraction.length <= 6) return raw;
+    const normalized = Number(numeric.toPrecision(12));
+    return Object.is(normalized, -0) ? "0" : String(normalized);
+  }
   function receivedDisplayValue(reading) {
     // V29 senders keep the instrument value in `value` and put the value that
     // must be shown remotely in `transmittedValue` after source calibration.
     // Prefer that transmitted result so the web receiver behaves like the APK
     // receiver.  The additional names keep compatibility with older payloads.
-    return (
+    return normalizeReceivedValue(
       reading?.transmittedValue ??
       reading?.calibratedValue ??
       reading?.effectiveValue ??

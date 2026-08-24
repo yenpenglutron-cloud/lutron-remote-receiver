@@ -10,3 +10,7 @@
 
 /* Per-channel display calibration. Logger and exports intentionally keep raw instrument values. */
 .channel-tile{display:grid;grid-template-rows:1fr auto;gap:8px;min-width:0}.channel-tile .measurement{height:100%}.calibration-button{width:100%;min-height:38px;border:1px solid color-mix(in srgb,var(--source,#6bbfd0) 55%,#355772);border-radius:10px;background:#10283a;color:#b9d4e8;font:700 14px inherit;cursor:pointer;transition:background .15s,border-color .15s,color .15s}.calibration-button:hover,.calibration-button:focus-visible{background:#17384c;border-color:#63cfc5;color:#efffff;outline:none}.calibration-button.active{border-color:#f6b94a;color:#ffd981;background:#3b3019}.calibrated-badge{width:max-content;margin:8px auto -4px;padding:3px 9px;border:1px solid #f6b94a;border-radius:999px;background:#493616;color:#ffe0a0;font-size:12px;font-weight:800}.alarm-form select{width:100%;border:1px solid #31bbc3;border-radius:8px;background:#081827;color:#fff;font:700 18px inherit;padding:12px;outline:none}.dialog-error{min-height:20px;margin:0;color:#ff9da5;font-size:14px}.calibration-button:active{transform:translateY(1px)}
+
+/* Keep long received values inside their own card on narrow tablet layouts. */
+.measurement{min-width:0;overflow:hidden}
+.value{max-width:100%;overflow:hidden}
