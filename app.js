@@ -341,16 +341,27 @@
         r.displayName ||
         r.displayCode ||
         r.channel ||
-        "Channel",
+      "Channel",
     ).trim();
   }
-  function channelNameFor(r) {
+  function customChannelNameFor(r) {
     if (!state.channelNames.has(r.key)) {
       const saved = savedChannelNames[r.key];
       if (typeof saved === "string" && saved.trim())
         state.channelNames.set(r.key, saved.trim());
     }
-    return state.channelNames.get(r.key) || defaultChannelName(r);
+    return state.channelNames.get(r.key) || "";
+  }
+  function channelNameFor(r) {
+    return customChannelNameFor(r) || defaultChannelName(r);
+  }
+  function listedChannelNameFor(r) {
+    const customName = customChannelNameFor(r);
+    const defaultName = defaultChannelName(r);
+    if (customName && customName !== defaultName) return customName;
+    return /^\d+$/.test(defaultName)
+      ? `Channel ${defaultName}`
+      : defaultName;
   }
   function saveChannelNames() {
     const out = {};
@@ -687,7 +698,7 @@
     return `${r.source} - ${r.displayCode || r.channel}`;
   }
   function loggerColumnName(r) {
-    return `${r.source}-${r.displayCode || r.channel} ${channelNameFor(r)}`;
+    return `${r.source}-${r.displayCode || r.channel} ${listedChannelNameFor(r)}`;
   }
   function renderOptions(data) {
     if (!data.length) {
@@ -698,7 +709,7 @@
       .map((r, index) => {
         const opt = optionFor(r.key),
           id = encodeURIComponent(r.key),
-          label = channelNameFor(r);
+          label = listedChannelNameFor(r);
         return `<button type="button" class="channel-option" style="--source:${esc(r.color)}" data-key="${id}" data-visible="${opt.visible}" role="checkbox" aria-checked="${opt.visible}" aria-label="${esc(label)}"><span class="channel-check" aria-hidden="true">✓</span><span class="option-index">${index + 1}</span><span class="option-name">${esc(label)}</span></button>`;
       })
       .join("");
@@ -809,12 +820,9 @@
   $("channelNameForm").addEventListener("submit", (event) => {
     event.preventDefault();
     const name = $("channelNameInput").value.trim();
-    if (!name) {
-      $("channelNameError").textContent = t("channel_name_invalid");
-      return;
-    }
     if (state.editing) {
-      state.channelNames.set(state.editing.key, name);
+      if (name) state.channelNames.set(state.editing.key, name);
+      else state.channelNames.delete(state.editing.key);
       saveChannelNames();
     }
     $("channelNameDialog").close();
