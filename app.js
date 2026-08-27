@@ -87,6 +87,13 @@
       calibration_number: "校正數字",
       calibrated: "已校正",
       calibration_invalid: "請輸入有效的校正數字；除法不可使用 0。",
+      channel_name_title: "{0} 編輯通道名稱",
+      channel_name_desc: "名稱會同步顯示於數據卡片、讀取通道、Logger 與匯出欄位。",
+      channel_name_label: "通道名稱",
+      channel_name_placeholder: "例如：濕度",
+      channel_name_invalid: "請輸入通道名稱。",
+      channel_name_restore: "恢復原名",
+      channel_name_edit: "編輯通道名稱：{0}",
     },
     en: {
       title: "Lutron Monitor | Remote Monitoring",
@@ -176,6 +183,13 @@
       calibration_number: "Calibration value",
       calibrated: "Calibrated",
       calibration_invalid: "Enter a valid value. Division by zero is not allowed.",
+      channel_name_title: "Edit {0} Channel Name",
+      channel_name_desc: "The name is used on the data card, channel selector, logger, and exports.",
+      channel_name_label: "Channel name",
+      channel_name_placeholder: "Example: Humidity",
+      channel_name_invalid: "Enter a channel name.",
+      channel_name_restore: "Restore Default",
+      channel_name_edit: "Edit channel name: {0}",
     },
   };
   let currentLang = localStorage.getItem("lutron-lang") || "zh";
@@ -196,6 +210,9 @@
     if (state.statusKey) setStatus(state.statusKey, state.statusClass);
     document.getElementById("lowAlarm").placeholder = t("not_set");
     document.getElementById("highAlarm").placeholder = t("not_set");
+    document.getElementById("channelNameInput").placeholder = t(
+      "channel_name_placeholder",
+    );
     render();
   };
   document.addEventListener("DOMContentLoaded", () =>
@@ -218,7 +235,8 @@
       numeric: true,
       sensitivity: "base",
     }),
-    OPTION_KEY = "lutron-remote-channel-options-v1";
+    OPTION_KEY = "lutron-remote-channel-options-v1",
+    CHANNEL_NAME_KEY = "lutron-remote-channel-names-v1";
   const CALIBRATION_KEY = "lutron-remote-channel-calibrations-v1";
   const state = {
     peer: null,
@@ -232,6 +250,7 @@
     stats: new Map(),
     alarms: new Map(),
     options: new Map(),
+    channelNames: new Map(),
     calibrations: new Map(),
     logs: [],
     logger: null,
@@ -277,6 +296,12 @@
   try {
     savedOptions = JSON.parse(localStorage.getItem(OPTION_KEY) || "{}");
   } catch {}
+  let savedChannelNames = {};
+  try {
+    savedChannelNames = JSON.parse(
+      localStorage.getItem(CHANNEL_NAME_KEY) || "{}",
+    );
+  } catch {}
   let savedCalibrations = {};
   try {
     // Old versions persisted calibration in localStorage. Remove that data so a
@@ -308,6 +333,32 @@
     optionFor(key)[field] = value;
     saveOptions();
     render();
+  }
+  function defaultChannelName(r) {
+    return String(
+      r.name ||
+        r.label ||
+        r.displayName ||
+        r.displayCode ||
+        r.channel ||
+        "Channel",
+    ).trim();
+  }
+  function channelNameFor(r) {
+    if (!state.channelNames.has(r.key)) {
+      const saved = savedChannelNames[r.key];
+      if (typeof saved === "string" && saved.trim())
+        state.channelNames.set(r.key, saved.trim());
+    }
+    return state.channelNames.get(r.key) || defaultChannelName(r);
+  }
+  function saveChannelNames() {
+    const out = {};
+    for (const [key, value] of state.channelNames) out[key] = value;
+    savedChannelNames = out;
+    try {
+      localStorage.setItem(CHANNEL_NAME_KEY, JSON.stringify(out));
+    } catch {}
   }
   function calibrationFor(key) {
     if (!state.calibrations.has(key) && savedCalibrations[key]) {
@@ -635,6 +686,9 @@
   function displayId(r) {
     return `${r.source} - ${r.displayCode || r.channel}`;
   }
+  function loggerColumnName(r) {
+    return `${r.source}-${r.displayCode || r.channel} ${channelNameFor(r)}`;
+  }
   function renderOptions(data) {
     if (!data.length) {
       optionsPanel.innerHTML = `<p class="settings-empty">${t("wait_channel_data")}</p>`;
@@ -644,11 +698,7 @@
       .map((r, index) => {
         const opt = optionFor(r.key),
           id = encodeURIComponent(r.key),
-          label =
-            r.name ||
-            r.label ||
-            r.displayName ||
-            `Channel ${r.displayCode || r.channel}`;
+          label = channelNameFor(r);
         return `<button type="button" class="channel-option" style="--source:${esc(r.color)}" data-key="${id}" data-visible="${opt.visible}" role="checkbox" aria-checked="${opt.visible}" aria-label="${esc(label)}"><span class="channel-check" aria-hidden="true">✓</span><span class="option-index">${index + 1}</span><span class="option-name">${esc(label)}</span></button>`;
       })
       .join("");
@@ -712,7 +762,12 @@
       el.className = `measurement${hit ? " alarm" : ""}`;
       el.style.setProperty("--source", r.color);
       el.onclick = () => openAlarm(r);
-      el.innerHTML = `<div class="channel">${esc(displayId(r))}</div><div class="name">${esc(r.name || r.label || r.displayName || r.displayCode || "Channel")}</div><div class="value">${esc(value)}<span class="unit">${esc(unit)}</span></div>${shown.calibrated ? `<div class="calibrated-badge">${t("calibrated")}</div>` : ""}<div class="meta"><span>${t("max")}${calibratedStats ? calibratedStats[1].toFixed(2) : "--"}</span><span>${t("min")}${calibratedStats ? calibratedStats[0].toFixed(2) : "--"}</span><span>${t("avg")}${Number.isFinite(calibratedAverage) ? calibratedAverage.toFixed(2) : "--"}</span></div>${a ? `<div class="alarm-limits">Alarm: ${Number.isFinite(a.low) ? `${t("low_alarm")} ${a.low}` : ""}${Number.isFinite(a.low) && Number.isFinite(a.high) ? " " : ""}${Number.isFinite(a.high) ? `${t("high_alarm")} ${a.high}` : ""}</div>` : ""}`;
+      const channelName = channelNameFor(r);
+      el.innerHTML = `<div class="channel">${esc(displayId(r))}</div><button type="button" class="name channel-name-button" title="${esc(t("channel_name_edit", channelName))}" aria-label="${esc(t("channel_name_edit", channelName))}">${esc(channelName)}</button><div class="value">${esc(value)}<span class="unit">${esc(unit)}</span></div>${shown.calibrated ? `<div class="calibrated-badge">${t("calibrated")}</div>` : ""}<div class="meta"><span>${t("max")}${calibratedStats ? calibratedStats[1].toFixed(2) : "--"}</span><span>${t("min")}${calibratedStats ? calibratedStats[0].toFixed(2) : "--"}</span><span>${t("avg")}${Number.isFinite(calibratedAverage) ? calibratedAverage.toFixed(2) : "--"}</span></div>${a ? `<div class="alarm-limits">Alarm: ${Number.isFinite(a.low) ? `${t("low_alarm")} ${a.low}` : ""}${Number.isFinite(a.low) && Number.isFinite(a.high) ? " " : ""}${Number.isFinite(a.high) ? `${t("high_alarm")} ${a.high}` : ""}</div>` : ""}`;
+      el.querySelector(".channel-name-button").onclick = (event) => {
+        event.stopPropagation();
+        openChannelName(r);
+      };
       const button = document.createElement("button");
       button.type = "button";
       button.className = `calibration-button${shown.calibrated ? " active" : ""}`;
@@ -740,6 +795,38 @@
     $("calibrationError").textContent = "";
     $("calibrationDialog").showModal();
   }
+  function openChannelName(r) {
+    state.editing = r;
+    $("channelNameTitle").textContent = t(
+      "channel_name_title",
+      displayId(r),
+    );
+    $("channelNameInput").value = channelNameFor(r);
+    $("channelNameError").textContent = "";
+    $("channelNameDialog").showModal();
+    requestAnimationFrame(() => $("channelNameInput").select());
+  }
+  $("channelNameForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = $("channelNameInput").value.trim();
+    if (!name) {
+      $("channelNameError").textContent = t("channel_name_invalid");
+      return;
+    }
+    if (state.editing) {
+      state.channelNames.set(state.editing.key, name);
+      saveChannelNames();
+    }
+    $("channelNameDialog").close();
+    render();
+  });
+  $("cancelChannelName").onclick = () => $("channelNameDialog").close();
+  $("restoreChannelName").onclick = () => {
+    if (state.editing) state.channelNames.delete(state.editing.key);
+    saveChannelNames();
+    $("channelNameDialog").close();
+    render();
+  };
   $("calibrationForm").addEventListener("submit", (event) => {
     event.preventDefault();
     const operator = $("calibrationOperator").value,
@@ -811,7 +898,7 @@
     };
     for (const r of allReadings())
       if (optionFor(r.key).visible) {
-        let column = displayId(r);
+        let column = loggerColumnName(r);
         if (Object.hasOwn(row.values, column))
           column = `${column}${t("source_index", r.sourceIndex + 1)}`;
         row.values[column] = calibratedDisplay(r).value;

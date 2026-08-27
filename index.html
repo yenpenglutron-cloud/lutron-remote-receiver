@@ -8,12 +8,12 @@
     />
     <meta name="theme-color" content="#081522" />
     <title data-i18n="title">Lutron Monitor｜跨網路遠端監看</title>
-    <link rel="stylesheet" href="./styles.css?v=20260814-1628" />
+    <link rel="stylesheet" href="./styles.css?v=20260827-1605" />
     <script
       defer
       src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"
     ></script>
-    <script defer src="./app.js?v=20260824-1125"></script>
+    <script defer src="./app.js?v=20260827-1605"></script>
   </head>
   <body>
     <main class="shell">
@@ -175,6 +175,35 @@
           </p>
         </div>
       </section>
+      <dialog id="channelNameDialog">
+        <form id="channelNameForm" class="alarm-form">
+          <h2 id="channelNameTitle">編輯通道名稱</h2>
+          <p data-i18n="channel_name_desc">
+            名稱會同步顯示於數據卡片、讀取通道、Logger 與匯出欄位。
+          </p>
+          <label
+            ><span data-i18n="channel_name_label">通道名稱</span
+            ><input
+              id="channelNameInput"
+              maxlength="40"
+              autocomplete="off"
+              placeholder="例如：濕度"
+              required
+          /></label>
+          <p id="channelNameError" class="dialog-error" role="alert"></p>
+          <div class="dialog-actions">
+            <button id="cancelChannelName" type="button" data-i18n="btn_cancel">
+              取消</button
+            ><button
+              id="restoreChannelName"
+              type="button"
+              data-i18n="channel_name_restore"
+            >
+              恢復原名</button
+            ><button type="submit" data-i18n="btn_save">儲存</button>
+          </div>
+        </form>
+      </dialog>
       <dialog id="alarmDialog">
         <form method="dialog" id="alarmForm" class="alarm-form">
           <h2 id="alarmTitle">通道 Alarm</h2>

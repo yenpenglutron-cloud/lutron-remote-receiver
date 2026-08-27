@@ -14,3 +14,6 @@
 /* Keep long received values inside their own card on narrow tablet layouts. */
 .measurement{min-width:0;overflow:hidden}
 .value{max-width:100%;overflow:hidden}
+
+/* Editable channel name keeps the original card layout and appearance. */
+.channel-name-button{display:block;width:100%;border:0;background:transparent;padding:0;font-family:inherit;line-height:inherit;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}.channel-name-button:hover,.channel-name-button:focus-visible{text-decoration:underline;text-underline-offset:4px;outline:none}.channel-name-button:active{filter:brightness(1.2)}
