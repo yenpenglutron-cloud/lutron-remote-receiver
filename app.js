@@ -80,7 +80,7 @@
       date: "日期",
       time: "時間",
       source_index: "（來源 {0}）",
-      calibration: "校正係數",
+      calibration: "校正設定",
       calibration_title: "{0} 校正係數",
       calibration_desc: "選擇運算方式並輸入校正數字；畫面、統計、Alarm、Logger 與匯出資料都使用校正後數值。",
       calibration_operator: "運算方式",
